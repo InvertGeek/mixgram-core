@@ -17,7 +17,7 @@ import (
 
 var (
 	UserName  = "MixGram"
-	UserEmail = "mixgram@anonymous.com"
+	UserEmail = "admin@mixgram.org"
 )
 
 // PushCommit 用 ssh 私钥字符串向远端仓库提交并推送一个 commit。
