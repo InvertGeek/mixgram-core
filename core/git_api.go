@@ -18,7 +18,6 @@ import (
 var (
 	UserName  = "MixGram"
 	UserEmail = "admin@mixgram.org"
-	BaseDir   = ""
 )
 
 // PushCommit 用 ssh 私钥字符串向远端仓库提交并推送一个 commit。
@@ -34,7 +33,7 @@ func PushCommit(repoURL, sshKeyPEM string, commitMsg string) error {
 
 	// 2) 克隆到内存 (完整克隆, depth=0)
 	// 修正：我们不再需要 clone 返回的 fs，用 _ 忽略
-	repo, _, err := utils.CloneOrUpdate(BaseDir, repoURL, auth)
+	repo, _, err := utils.CloneToMemory(repoURL, auth)
 	if err != nil {
 		return fmt.Errorf("clone repo: %w", err)
 	}
@@ -132,7 +131,7 @@ func FetchCommits(repoURL, sshKeyPEM string, max int) ([]SimpleCommit, error) {
 	}
 
 	// 修正：我们不需要 fs，所以用 _ 忽略
-	repo, _, err := utils.CloneOrUpdate(BaseDir, repoURL, auth)
+	repo, _, err := utils.CloneToMemory(repoURL, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +178,7 @@ func TrimOldCommits(repoURL, sshKeyPEM string, keep int) error {
 	}
 
 	// 修正：我们不需要 fs，所以用 _ 忽略
-	repo, _, err := utils.CloneOrUpdate(BaseDir, repoURL, auth)
+	repo, _, err := utils.CloneToMemory(repoURL, auth)
 	if err != nil {
 		return err
 	}
@@ -296,7 +295,7 @@ func DeleteCommit(repoURL, sshKeyPEM string, commitHash string) error {
 	}
 
 	// 克隆到内存 (完整克隆, depth=0)
-	repo, _, err := utils.CloneOrUpdate(BaseDir, repoURL, auth)
+	repo, _, err := utils.CloneToMemory(repoURL, auth)
 	if err != nil {
 		return fmt.Errorf("clone repo: %w", err)
 	}
@@ -412,7 +411,7 @@ func ModifyCommit(repoURL, sshKeyPEM string, commitHash string, newCommitMsg str
 	}
 
 	// 克隆到内存 (完整克隆, depth=0)
-	repo, _, err := utils.CloneOrUpdate(BaseDir, repoURL, auth)
+	repo, _, err := utils.CloneToMemory(repoURL, auth)
 	if err != nil {
 		return fmt.Errorf("clone repo: %w", err)
 	}
