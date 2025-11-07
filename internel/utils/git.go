@@ -1,15 +1,19 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/go-git/go-billy/v5"
-	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	ggssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"golang.org/x/crypto/ssh"
 	"io"
+	"os"
+	"path/filepath"
 )
 
 // NewSSHAuth 创建一个基于 PEM 私钥字符串的 SSH 认证方法
@@ -23,23 +27,53 @@ func NewSSHAuth(sshKeyPEM string) (*ggssh.PublicKeys, error) {
 	return auth, nil
 }
 
-// CloneToMemory 克隆一个仓库到内存中
-// depth: 克隆深度，0 表示完整克隆
-// 修正：返回 billy.Filesystem 接口，而不是 *memfs.Memory
-func CloneToMemory(repoURL string, auth transport.AuthMethod) (*git.Repository, billy.Filesystem, error) {
-	storer := memory.NewStorage()
-	fs := memfs.New() // fs 是 *memfs.Memory
+func CloneOrUpdate(baseDir, repoURL string, auth transport.AuthMethod) (*git.Repository, billy.Filesystem, error) {
+	// 用仓库地址计算 SHA256 作为文件夹名
+	hash := sha256.Sum256([]byte(repoURL))
+	folderName := hex.EncodeToString(hash[:])
+	repoDir := filepath.Join(baseDir, folderName)
 
-	cloneOpts := &git.CloneOptions{
-		URL:      repoURL,
-		Auth:     auth,
-		Progress: io.Discard,
+	fs := osfs.New(repoDir) // billy.Filesystem
+
+	var repo *git.Repository
+	var err error
+
+	if _, statErr := os.Stat(repoDir); os.IsNotExist(statErr) {
+		// 目录不存在，执行克隆
+		cloneOpts := &git.CloneOptions{
+			URL:      repoURL,
+			Auth:     auth,
+			Progress: io.Discard,
+		}
+
+		repo, err = git.PlainClone(repoDir, false, cloneOpts)
+		if err != nil {
+			return nil, nil, fmt.Errorf("clone: %w", err)
+		}
+	} else {
+		// 目录存在，尝试打开仓库
+		repo, err = git.PlainOpen(repoDir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open existing repo: %w", err)
+		}
+
+		// 执行 pull 更新
+		w, err := repo.Worktree()
+		if err != nil {
+			return nil, nil, fmt.Errorf("get worktree: %w", err)
+		}
+
+		pullOpts := &git.PullOptions{
+			RemoteName: "origin",
+			Auth:       auth,
+			Progress:   io.Discard,
+		}
+
+		// 如果已经是最新，会返回 git.NoErrAlreadyUpToDate，可以忽略
+		if err := w.Pull(pullOpts); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+			return nil, nil, fmt.Errorf("pull: %w", err)
+		}
 	}
 
-	repo, err := git.Clone(storer, fs, cloneOpts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("clone: %w", err)
-	}
-	// 修正：返回 fs (*memfs.Memory) 作为 billy.Filesystem 接口
 	return repo, fs, nil
 }
